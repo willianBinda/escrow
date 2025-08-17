@@ -1,0 +1,19 @@
+NVM
+https://www.treinaweb.com.br/blog/instalando-e-gerenciando-varias-versoes-do-node-js-com-nvm
+
+GANACHE
+npm install ganache --global
+
+REACT
+npm create vite@latest my-app -- --template react
+npm install react-bootstrap bootstrap
+npm install ethers
+
+import 'bootstrap/dist/css/bootstrap.min.css';
+
+
+truffle migrate --reset
+ganache-cli
+
+
+0.8.21+commit.d9974bed.Emscripten.clang
