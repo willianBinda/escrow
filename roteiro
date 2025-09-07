@@ -3,6 +3,7 @@ https://www.treinaweb.com.br/blog/instalando-e-gerenciando-varias-versoes-do-nod
 
 GANACHE
 npm install ganache --global
+npm install truffle --global
 
 REACT
 npm create vite@latest my-app -- --template react
@@ -11,6 +12,7 @@ npm install ethers
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
+truffle init
 
 truffle migrate --reset
 ganache-cli
