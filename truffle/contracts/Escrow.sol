@@ -7,7 +7,6 @@ contract Escrow is AccessControl {
     bytes32 public constant FORNECEDOR_ROLE = keccak256("FORNECEDOR_ROLE");
 
     enum SituacaoPermissao {
-        PENDENTE,
         CONFIRMADA,
         REMOVIDA
     }
@@ -41,9 +40,8 @@ contract Escrow is AccessControl {
     mapping(address => uint256) public cofreFornecedor;
     mapping(address => mapping(uint256 => Item)) public itensPorFornecedor;
     mapping(address => uint256[]) public listaItensFornecedor;
-    mapping(address => Pedido[]) public itensComprados;
+    // mapping(address => Pedido[]) public itensComprados;
     mapping(uint256 => Pedido) public pedidos;
-    mapping(address => Pedido[]) public pedidosPorComprador;
 
     event ItemAdicionado(
         address indexed fornecedor,
@@ -69,12 +67,14 @@ contract Escrow is AccessControl {
     event PedidoRecebido(
         uint256 indexed pedidoId,
         address indexed comprador,
-        address indexed fornecedor
+        address indexed fornecedor,
+        SituacaoPedido situacao
     );
     event PedidoEntregue(
         uint256 indexed pedidoId,
         address indexed comprador,
-        address indexed fornecedor
+        address indexed fornecedor,
+        SituacaoPedido situacao
     );
     event PedidoFinalizado(address indexed fornecedor, uint256 valor);
 
@@ -85,13 +85,17 @@ contract Escrow is AccessControl {
     function concederPermissaoFornecedor(
         address _conta
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!hasRole(FORNECEDOR_ROLE, _conta), "Conta ja possui permissao");
         _grantRole(FORNECEDOR_ROLE, _conta);
+        emit EventoPermissaoFornecedor(_conta, SituacaoPermissao.CONFIRMADA);
     }
 
     function removerPermissaoFornecedor(
         address _conta
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(hasRole(FORNECEDOR_ROLE, _conta), "Conta nao possui permissao");
         _revokeRole(FORNECEDOR_ROLE, _conta);
+        emit EventoPermissaoFornecedor(_conta, SituacaoPermissao.REMOVIDA);
     }
 
     function isFornecedor() public view returns (bool) {
@@ -157,16 +161,21 @@ contract Escrow is AccessControl {
 
         item.quantidade -= 1;
 
+        uint256 id = proximoPedidoId++;
+
         Pedido memory pedido = Pedido({
+            id: id,
             itemId: _itemId,
-            status: SituacaoPedido.PENDENTE,
+            situacao: SituacaoPedido.PENDENTE,
             fornecedor: _fornecedor,
+            comprador: msg.sender,
             valorPago: msg.value
         });
 
-        itensComprados[msg.sender].push(pedido);
+        // itensComprados[msg.sender].push(pedido);
+        pedidos[id] = pedido;
 
-        emit ItemComprado(msg.sender, _fornecedor, _itemId, msg.value);
+        emit ItemComprado(id, msg.sender, _fornecedor, _itemId, msg.value);
     }
 
     function sacarSaldo() external onlyRole(FORNECEDOR_ROLE) {
@@ -178,23 +187,75 @@ contract Escrow is AccessControl {
         emit SaldoSacado(msg.sender, saldo);
     }
 
-    function listarPedidos() external view returns (Pedido[] memory) {
-        return itensComprados[msg.sender];
-    }
+    // function listarPedidos() external view returns (Pedido[] memory) {
+    //     return itensComprados[msg.sender];
+    // }
 
     function confirmarRecebimento(uint256 _pedidoId) external {
+        Pedido storage pedido = pedidos[_pedidoId];
+
+        require(pedido.comprador == msg.sender);
+
         require(
-            _pedidoIndex < itensComprados[msg.sender].length,
-            "Pedido inexistente"
+            pedido.situacao == SituacaoPedido.PENDENTE ||
+                pedido.situacao == SituacaoPedido.ENTREGUE,
+            "Pedido ja finalizado"
         );
 
-        Pedido storage pedido = itensComprados[msg.sender][_pedidoIndex];
-        require(pedido.status == StatusItem.PENDENTE, "Pedido ja finalizado");
+        if (pedido.situacao == SituacaoPedido.PENDENTE) {
+            pedido.situacao = SituacaoPedido.RECEBIDO;
+        } else if (pedido.situacao == SituacaoPedido.ENTREGUE) {
+            emit PedidoRecebido(
+                pedido.id,
+                pedido.comprador,
+                pedido.fornecedor,
+                SituacaoPedido.RECEBIDO
+            );
+            pedido.situacao = SituacaoPedido.FINALIZADO;
+            cofreFornecedor[pedido.fornecedor] += pedido.valorPago;
+            emit PedidoFinalizado(pedido.fornecedor, pedido.valorPago);
+        }
 
-        pedido.status = StatusItem.FINALIZADO;
-        cofreFornecedor[pedido.fornecedor] += pedido.valorPago;
-        emit PedidoConfirmado(msg.sender, pedido.fornecedor, pedido.itemId);
+        emit PedidoRecebido(
+            pedido.id,
+            pedido.comprador,
+            pedido.fornecedor,
+            pedido.situacao
+        );
     }
 
-    function confirmarEntrega(uint256 _pedidoId) external {}
+    function confirmarEntrega(
+        uint256 _pedidoId
+    ) external onlyRole(FORNECEDOR_ROLE) {
+        Pedido storage pedido = pedidos[_pedidoId];
+
+        require(pedido.fornecedor == msg.sender);
+
+        require(
+            pedido.situacao == SituacaoPedido.PENDENTE ||
+                pedido.situacao == SituacaoPedido.RECEBIDO,
+            "Pedido ja finalizado"
+        );
+
+        if (pedido.situacao == SituacaoPedido.PENDENTE) {
+            pedido.situacao = SituacaoPedido.ENTREGUE;
+        } else if (pedido.situacao == SituacaoPedido.RECEBIDO) {
+            emit PedidoEntregue(
+                pedido.id,
+                pedido.comprador,
+                pedido.fornecedor,
+                SituacaoPedido.ENTREGUE
+            );
+            pedido.situacao = SituacaoPedido.FINALIZADO;
+            cofreFornecedor[pedido.fornecedor] += pedido.valorPago;
+            emit PedidoFinalizado(pedido.fornecedor, pedido.valorPago);
+        }
+
+        emit PedidoEntregue(
+            pedido.id,
+            pedido.comprador,
+            pedido.fornecedor,
+            pedido.situacao
+        );
+    }
 }

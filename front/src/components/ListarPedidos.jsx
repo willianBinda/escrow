@@ -10,14 +10,14 @@ import {
 import { alertaNaoConectado, buscarPedidos } from "../servicos";
 
 const ListaPedidos = () => {
-  const { contrato } = useEstadosGlobais();
+  const { contrato, enderecoUsuario } = useEstadosGlobais();
   const [listaPedidos, setListaPedidos] = useState([]);
 
   useEffect(() => {
     const listarPedidos = async () => {
       if (contrato === null) return;
 
-      const lista = await buscarPedidos(contrato);
+      const lista = await buscarPedidos(contrato, enderecoUsuario);
 
       setListaPedidos(lista);
     };

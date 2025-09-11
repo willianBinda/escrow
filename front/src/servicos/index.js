@@ -39,16 +39,20 @@ export async function buscarItensFornecedores() {
   return itens;
 }
 
-export async function buscarPedidos(contrato) {
-  const pedidos = await contrato.listarPedidos();
+export async function buscarPedidos(contrato, comprador) {
+  const filter = contrato.filters.ItemComprado(null, comprador, null);
+  const resultado = await contrato.queryFilter(filter, 0, "latest");
 
   const lista = [];
-  for (const pedido of pedidos) {
+  for (const el of resultado) {
+    const pedidoId = el.args.pedidoId;
+    const pedido = await contrato.pedidos(pedidoId);
+
     const item = await contrato.itensPorFornecedor(
       pedido.fornecedor,
       pedido.itemId
     );
-    // console.log(pedido);
+
     lista.push({
       id: pedido.id,
       itemId: pedido.itemId,
